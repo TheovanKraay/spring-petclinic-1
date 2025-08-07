@@ -17,30 +17,26 @@ package org.springframework.samples.petclinic.model;
 
 import java.io.Serializable;
 
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.MappedSuperclass;
+import com.azure.spring.data.cosmos.core.mapping.Container;
+import com.azure.spring.data.cosmos.core.mapping.PartitionKey;
+import org.springframework.data.annotation.Id;
 
 /**
  * Simple JavaBean domain object with an id property. Used as a base class for objects
  * needing this property.
- *
- * @author Ken Krebs
- * @author Juergen Hoeller
  */
-@MappedSuperclass
+@Container(containerName = "BaseEntity")
 public class BaseEntity implements Serializable {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Integer id;
+	@PartitionKey
+	private String id;
 
-	public Integer getId() {
+	public String getId() {
 		return id;
 	}
 
-	public void setId(Integer id) {
+	public void setId(String id) {
 		this.id = id;
 	}
 

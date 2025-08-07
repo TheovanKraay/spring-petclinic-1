@@ -15,8 +15,7 @@
  */
 package org.springframework.samples.petclinic.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.MappedSuperclass;
+import com.azure.spring.data.cosmos.core.mapping.Container;
 import jakarta.validation.constraints.NotBlank;
 
 /**
@@ -24,14 +23,12 @@ import jakarta.validation.constraints.NotBlank;
  *
  * @author Ken Krebs
  */
-@MappedSuperclass
+@Container(containerName = "Person")
 public class Person extends BaseEntity {
 
-	@Column(name = "first_name")
 	@NotBlank
 	private String firstName;
 
-	@Column(name = "last_name")
 	@NotBlank
 	private String lastName;
 

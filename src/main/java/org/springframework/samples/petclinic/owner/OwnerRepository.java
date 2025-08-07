@@ -18,11 +18,10 @@ package org.springframework.samples.petclinic.owner;
 import java.util.List;
 import java.util.Optional;
 
+import com.azure.spring.data.cosmos.repository.CosmosRepository;
 import jakarta.annotation.Nonnull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 
 /**
  * Repository class for <code>Owner</code> domain objects. All method names are compliant
@@ -36,7 +35,7 @@ import org.springframework.data.jpa.repository.Query;
  * @author Michael Isvy
  * @author Wick Dynex
  */
-public interface OwnerRepository extends JpaRepository<Owner, Integer> {
+public interface OwnerRepository extends CosmosRepository<Owner, String> {
 
 	/**
 	 * Retrieve {@link Owner}s from the data store by last name, returning all owners
@@ -60,6 +59,6 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
 	 * @throws IllegalArgumentException if the id is null (assuming null is not a valid
 	 * input for id)
 	 */
-	Optional<Owner> findById(@Nonnull Integer id);
+	Optional<Owner> findById(@Nonnull String id);
 
 }

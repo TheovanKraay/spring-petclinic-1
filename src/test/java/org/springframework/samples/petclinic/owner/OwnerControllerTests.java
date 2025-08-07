@@ -70,7 +70,7 @@ class OwnerControllerTests {
 
 	private Owner george() {
 		Owner george = new Owner();
-		george.setId(TEST_OWNER_ID);
+		george.setId(String.valueOf(TEST_OWNER_ID));
 		george.setFirstName("George");
 		george.setLastName("Franklin");
 		george.setAddress("110 W. Liberty St.");
@@ -83,7 +83,7 @@ class OwnerControllerTests {
 		max.setName("Max");
 		max.setBirthDate(LocalDate.now());
 		george.addPet(max);
-		max.setId(1);
+		max.setId(String.valueOf(1));
 		return george;
 	}
 
@@ -94,7 +94,7 @@ class OwnerControllerTests {
 		given(this.owners.findByLastNameStartingWith(eq("Franklin"), any(Pageable.class)))
 			.willReturn(new PageImpl<>(List.of(george)));
 
-		given(this.owners.findById(TEST_OWNER_ID)).willReturn(Optional.of(george));
+		given(this.owners.findById(String.valueOf(TEST_OWNER_ID))).willReturn(Optional.of(george));
 		Visit visit = new Visit();
 		visit.setDate(LocalDate.now());
 		george.getPet("Max").getVisits().add(visit);
@@ -233,14 +233,14 @@ class OwnerControllerTests {
 		int pathOwnerId = 1;
 
 		Owner owner = new Owner();
-		owner.setId(2);
+		owner.setId(String.valueOf(2));
 		owner.setFirstName("John");
 		owner.setLastName("Doe");
 		owner.setAddress("Center Street");
 		owner.setCity("New York");
 		owner.setTelephone("0123456789");
 
-		when(owners.findById(pathOwnerId)).thenReturn(Optional.of(owner));
+		when(owners.findById(String.valueOf(pathOwnerId))).thenReturn(Optional.of(owner));
 
 		mockMvc.perform(MockMvcRequestBuilders.post("/owners/{ownerId}/edit", pathOwnerId).flashAttr("owner", owner))
 			.andExpect(status().is3xxRedirection())

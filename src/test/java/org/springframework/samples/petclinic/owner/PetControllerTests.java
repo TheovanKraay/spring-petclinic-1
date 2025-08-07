@@ -69,20 +69,20 @@ class PetControllerTests {
 	@BeforeEach
 	void setup() {
 		PetType cat = new PetType();
-		cat.setId(3);
+		cat.setId(String.valueOf(3));
 		cat.setName("hamster");
-		given(this.types.findPetTypes()).willReturn(List.of(cat));
+		given(this.types.findAll()).willReturn(List.of(cat));
 
 		Owner owner = new Owner();
 		Pet pet = new Pet();
 		Pet dog = new Pet();
 		owner.addPet(pet);
 		owner.addPet(dog);
-		pet.setId(TEST_PET_ID);
-		dog.setId(TEST_PET_ID + 1);
+		pet.setId(String.valueOf(TEST_PET_ID));
+		dog.setId(String.valueOf(TEST_PET_ID + 1));
 		pet.setName("petty");
 		dog.setName("doggy");
-		given(this.owners.findById(TEST_OWNER_ID)).willReturn(Optional.of(owner));
+		given(this.owners.findById(String.valueOf(TEST_OWNER_ID))).willReturn(Optional.of(owner));
 	}
 
 	@Test

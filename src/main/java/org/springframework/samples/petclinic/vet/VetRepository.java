@@ -15,11 +15,11 @@
  */
 package org.springframework.samples.petclinic.vet;
 
+import com.azure.spring.data.cosmos.repository.CosmosRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.repository.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
@@ -35,7 +35,7 @@ import java.util.Collection;
  * @author Sam Brannen
  * @author Michael Isvy
  */
-public interface VetRepository extends Repository<Vet, Integer> {
+public interface VetRepository extends CosmosRepository<Vet, String> {
 
 	/**
 	 * Retrieve all <code>Vet</code>s from the data store.
