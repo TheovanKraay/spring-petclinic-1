@@ -6,8 +6,10 @@
 3) Add Cosmos config with proper Azure identity authentication.
 4) Transform entities (ids → `String`, add `@Container` and `@PartitionKey`, remove JPA mappings, adjust relationships).
 5) Convert repositories (`JpaRepository` → `CosmosRepository`).
-6) **CRITICAL**: Update ALL test files to work with String IDs and Cosmos repositories.
-7) Seed data via `CommandLineRunner`.
+6) **Create service layer** for relationship management and template compatibility.
+7) **CRITICAL**: Update ALL test files to work with String IDs and Cosmos repositories.
+8) Seed data via `CommandLineRunner`.
+9) **CRITICAL**: Test runtime functionality and fix template compatibility issues.
 
 ## Step-by-step
 
@@ -82,7 +84,15 @@
   - For relationships:
     - Embed collections for one-to-many (e.g., `List<Pet> pets` in Owner)
     - Use reference IDs for many-to-one (e.g., `String ownerId` in Pet)
+    - **For complex relationships**: Store IDs but add transient properties for templates
   - Add constructor to set partition key: `setPartitionKey("entityType")`
+- **CRITICAL - Template Compatibility for Relationship Changes**:
+  - **When converting relationships to ID references, preserve template access**
+  - **Example**: If entity had `List<Specialty> specialties` → convert to:
+    - Storage: `List<String> specialtyIds` (persisted to Cosmos)
+    - Template: `@JsonIgnore private List<Specialty> specialties = new ArrayList<>()` (transient)
+    - Add getters/setters for both properties
+  - **Update entity method logic**: `getNrOfSpecialties()` should use the transient list
 - **CRITICAL - Method Signature Conflicts**:
   - **When converting ID types from Integer to String, check for method signature conflicts**
   - **Common conflict**: `getPet(String name)` vs `getPet(String id)` - both have same signature
@@ -106,7 +116,68 @@
   - **Replace custom method names**: `findPetTypes()` → `findAllOrderByName()`
   - **Update ALL references** to changed method names in controllers and formatters
 
-### Step 6 — Data seeding
+### Step 6 — **Create service layer** for relationship management and template compatibility
+- **CRITICAL**: Create service classes to bridge Cosmos document storage with existing template expectations
+- **Purpose**: Handle relationship population and maintain template compatibility
+- **Service pattern for each entity with relationships**:
+  ```java
+  @Service
+  public class EntityService {
+      private final EntityRepository entityRepository;
+      private final RelatedRepository relatedRepository;
+      
+      public EntityService(EntityRepository entityRepository, RelatedRepository relatedRepository) {
+          this.entityRepository = entityRepository;
+          this.relatedRepository = relatedRepository;
+      }
+      
+      public List<Entity> findAll() {
+          List<Entity> entities = entityRepository.findAll();
+          entities.forEach(this::populateRelationships);
+          return entities;
+      }
+      
+      public Optional<Entity> findById(String id) {
+          Optional<Entity> entityOpt = entityRepository.findById(id);
+          if (entityOpt.isPresent()) {
+              Entity entity = entityOpt.get();
+              populateRelationships(entity);
+              return Optional.of(entity);
+          }
+          return Optional.empty();
+      }
+      
+      private void populateRelationships(Entity entity) {
+          if (entity.getRelatedIds() != null && !entity.getRelatedIds().isEmpty()) {
+              List<Related> related = entity.getRelatedIds()
+                  .stream()
+                  .map(relatedRepository::findById)
+                  .filter(Optional::isPresent)
+                  .map(Optional::get)
+                  .collect(Collectors.toList());
+              // Set transient property for template access
+              entity.setRelated(related);
+          }
+      }
+  }
+  ```
+- **Update controllers** to use service layer instead of repositories directly
+- **Controller pattern change**:
+  ```java
+  // OLD: Direct repository usage
+  @Autowired
+  private EntityRepository entityRepository;
+  
+  // NEW: Service layer usage
+  @Autowired
+  private EntityService entityService;
+  
+  // Update method calls
+  // OLD: entityRepository.findAll()
+  // NEW: entityService.findAll()
+  ```
+
+### Step 7 — Data seeding
 - Create `@Component` implementing `CommandLineRunner`:
   ```java
   @Component
@@ -122,7 +193,7 @@
   }
   ```
 
-### Step 7 — Test file conversion (CRITICAL SECTION)
+### Step 8 — Test file conversion (CRITICAL SECTION)
 **This step is often overlooked but essential for successful conversion**
 
 #### A. **COMPILATION CHECK STRATEGY**
@@ -182,7 +253,91 @@
   - `assertThat(entity.getId()).isEqualTo(1)` → `assertThat(entity.getId()).isEqualTo("test-id-1")`
   - JSON path assertions: `jsonPath("$.id").value(1)` → `jsonPath("$.id").value("test-id-1")`
 
-### Step 8 — **Systematic Error Resolution Process**
+### Step 8 — Test file conversion (CRITICAL SECTION)
+**This step is often overlooked but essential for successful conversion**
+
+#### A. **COMPILATION CHECK STRATEGY**
+- **After each major change, run `mvn test-compile` to catch issues early**
+- **Fix compilation errors systematically before proceeding**
+- **Don't rely on IDE - Maven compilation reveals all issues**
+
+#### B. **Search and Update ALL test files systematically**
+**Use search tools to find and update every occurrence:**
+- Search for: `int.*TEST.*ID` → Replace with: `String.*TEST.*ID = "test-xyz-1"`
+- Search for: `setId\(\d+\)` → Replace with: `setId("test-id-X")`
+- Search for: `findById\(\d+\)` → Replace with: `findById("test-id-X")`
+- Search for: `\.findPetTypes\(\)` → Replace with: `.findAllOrderByName()`
+- Search for: `\.findByLastNameStartingWith\(.*,.*Pageable` → Remove pagination parameter
+
+#### C. Update test annotations and imports
+- Replace `@DataJpaTest` with `@SpringBootTest` or appropriate slice test
+- Remove `@AutoConfigureTestDatabase` annotations
+- Remove `@Transactional` from tests (unless single-partition operations)
+- Remove imports from `org.springframework.orm` package
+
+#### D. Fix entity ID usage in ALL test files
+**Critical files that MUST be updated (search entire test directory):**
+- `*ControllerTests.java` - Path variables, entity creation, mock setup
+- `*ServiceTests.java` - Repository interactions, entity IDs
+- `EntityUtils.java` - Utility methods for ID handling
+- `*FormatterTests.java` - Repository method calls
+- `*ValidatorTests.java` - Entity creation with String IDs
+- Integration test classes - Test data setup
+
+#### E. **Fix Controller and Service classes affected by repository changes**
+- **Update controllers that call repository methods with changed signatures**
+- **Update formatters/converters that use repository methods**
+- **Common files to check**:
+  - `PetTypeFormatter.java` - often calls `findPetTypes()` method
+  - `*Controller.java` - may have pagination logic to remove
+  - Service classes that use repository methods
+
+#### F. Update repository mocking in tests
+- Remove pagination from repository mocks:
+  - `given(repository.findByX(param, pageable)).willReturn(pageResult)` 
+  - → `given(repository.findByX(param)).willReturn(listResult)`
+- Update method names in mocks:
+  - `given(petTypeRepository.findPetTypes()).willReturn(types)`
+  - → `given(petTypeRepository.findAllOrderByName()).willReturn(types)`
+
+#### G. Fix utility classes used by tests
+- Update `EntityUtils.java` or similar:
+  - Remove JPA-specific exception imports (`ObjectRetrievalFailureException`)
+  - Change method signatures from `int id` to `String id`
+  - Update ID comparison logic: `entity.getId() == entityId` → `entity.getId().equals(entityId)`
+  - Replace JPA exceptions with standard exceptions (`IllegalArgumentException`)
+
+#### H. Update assertions for String IDs
+- Change ID assertions:
+  - `assertThat(entity.getId()).isNotZero()` → `assertThat(entity.getId()).isNotEmpty()`
+  - `assertThat(entity.getId()).isEqualTo(1)` → `assertThat(entity.getId()).isEqualTo("test-id-1")`
+  - JSON path assertions: `jsonPath("$.id").value(1)` → `jsonPath("$.id").value("test-id-1")`
+
+### Step 9 — **Runtime Testing and Template Compatibility**
+
+#### **CRITICAL**: Test the running application after compilation success
+- **Start the application**: `mvn spring-boot:run`
+- **Navigate through all pages** in the web interface to identify runtime errors
+- **Common runtime issues after conversion**:
+  - Templates trying to access properties that no longer exist (e.g., `vet.specialties`)
+  - Service layer not populating transient relationship properties
+  - Controllers not using service layer for relationship loading
+
+#### **Template compatibility fixes**:
+- **If templates access relationship properties** (e.g., `entity.relatedObjects`):
+  - Ensure transient properties exist on entities with proper getters/setters
+  - Verify service layer populates these transient properties
+  - Update `getNrOfXXX()` methods to use transient lists instead of ID lists
+- **Check for SpEL (Spring Expression Language) errors** in logs:
+  - `Property or field 'xxx' cannot be found` → Add missing transient property
+  - `EL1008E` errors → Service layer not populating relationships
+
+#### **Service layer verification**:
+- **Ensure all controllers use service layer** instead of direct repository access
+- **Verify service methods populate relationships** before returning entities
+- **Test all CRUD operations** through the web interface
+
+### Step 10 — **Systematic Error Resolution Process**
 
 #### When compilation fails:
 1. **Run `mvn compile` first** - fix main source issues before tests
@@ -193,18 +348,41 @@
    - `cannot find symbol: method Y()` → Update to new repository method names
    - Method signature conflicts → Rename conflicting methods
 
+### Step 10 — **Systematic Error Resolution Process**
+
+#### When compilation fails:
+1. **Run `mvn compile` first** - fix main source issues before tests
+2. **Run `mvn test-compile`** - systematically fix each test compilation error
+3. **Focus on most frequent error patterns**:
+   - `int cannot be converted to String` → Change test constants and entity setters
+   - `method X cannot be applied to given types` → Remove pagination parameters
+   - `cannot find symbol: method Y()` → Update to new repository method names
+   - Method signature conflicts → Rename conflicting methods
+
+#### When runtime fails:
+1. **Check application logs** for specific error messages
+2. **Look for template/SpEL errors**:
+   - `Property or field 'xxx' cannot be found` → Add transient property to entity
+   - Missing relationship data → Service layer not populating relationships
+3. **Verify service layer usage** in controllers
+4. **Test navigation through all application pages**
+
 #### Common error patterns and solutions:
 - **`method findByLastNameStartingWith cannot be applied`** → Remove `Pageable` parameter
 - **`cannot find symbol: method findPetTypes()`** → Change to `findAllOrderByName()`
 - **`incompatible types: int cannot be converted to String`** → Update test ID constants
 - **`method getPet(String) is already defined`** → Rename one method (e.g., `getPetByName`)
 - **`cannot find symbol: method isNotZero()`** → Change to `isNotEmpty()` for String IDs
+- **`Property or field 'specialties' cannot be found`** → Add transient property and populate in service
 
-### Step 9 — Validation checklist
+### Step 11 — Validation checklist
 After conversion, verify:
 - [ ] **Main application compiles**: `mvn compile` succeeds
 - [ ] **All test files compile**: `mvn test-compile` succeeds  
 - [ ] **No compilation errors**: Address every single compilation error
+- [ ] **Application starts successfully**: `mvn spring-boot:run` without errors
+- [ ] **All web pages load**: Navigate through all application pages without runtime errors
+- [ ] **Service layer populates relationships**: Transient properties are correctly set
 - [ ] No remaining `jakarta.persistence` imports
 - [ ] All entity IDs are `String` type consistently
 - [ ] All repository interfaces extend `CosmosRepository<Entity, String>`
@@ -225,6 +403,9 @@ After conversion, verify:
 7. **Not updating controller pagination logic** - Remove pagination from controllers when repositories change
 8. **Leaving JPA-specific test annotations** - Replace with Cosmos-compatible alternatives
 9. **Incomplete test file updates** - Search entire test directory, not just obvious files
+10. **Skipping runtime testing** - Always test the running application, not just compilation
+11. **Missing service layer** - Don't access repositories directly from controllers
+12. **Forgetting transient properties** - Templates may need access to relationship data
 
 ### Debugging compilation issues systematically
 If compilation fails after conversion:
@@ -238,6 +419,18 @@ If compilation fails after conversion:
 8. **Look for method signature conflicts** - resolve by renaming conflicting methods
 9. **Verify assertion methods work with String IDs** (`isNotEmpty()` not `isNotZero()`)
 
+### Debugging runtime issues systematically
+If runtime fails after successful compilation:
+1. **Check application startup logs** for initialization errors
+2. **Navigate through all pages** to identify template/controller issues
+3. **Look for SpEL template errors** in logs:
+   - `Property or field 'xxx' cannot be found` → Missing transient property
+   - `EL1008E` → Service layer not populating relationships
+4. **Verify service layer is being used** instead of direct repository access
+5. **Check that transient properties are populated** in service methods
+6. **Test all CRUD operations** through the web interface
+7. **Verify data seeding worked correctly** and relationships are maintained
+
 ### **Pro Tips for Success**
 - **Compile early and often** - Don't let errors accumulate
 - **Use global search and replace** - Find all occurrences of patterns to update
@@ -245,5 +438,7 @@ If compilation fails after conversion:
 - **Test method renames carefully** - Ensure all callers are updated
 - **Use meaningful String IDs** - "owner-1", "pet-1" instead of random strings
 - **Check controller classes** - They often call repository methods that change signatures
+- **Always test runtime** - Compilation success doesn't guarantee functional templates
+- **Service layer is critical** - Bridge between document storage and template expectations
 
 This comprehensive guide ensures successful JPA to Cosmos DB conversion with properly functioning tests and no compilation errors.
