@@ -93,6 +93,25 @@
     - Template: `@JsonIgnore private List<Specialty> specialties = new ArrayList<>()` (transient)
     - Add getters/setters for both properties
   - **Update entity method logic**: `getNrOfSpecialties()` should use the transient list
+- **CRITICAL - Template Compatibility for Thymeleaf/JSP Applications**:
+  - **Identify template property access**: Search for `${entity.relationshipProperty}` in `.html` files
+  - **For each relationship property accessed in templates**:
+    - **Storage**: Keep ID-based storage (e.g., `List<String> specialtyIds`)
+    - **Template Access**: Add transient property with `@JsonIgnore` (e.g., `private List<Specialty> specialties = new ArrayList<>()`)
+    - **Example**:
+      ```java
+      // Stored in Cosmos (persisted)
+      private List<String> specialtyIds = new ArrayList<>();
+      
+      // For template access (transient)
+      @JsonIgnore
+      private List<Specialty> specialties = new ArrayList<>();
+      
+      // Getters/setters for both properties
+      public List<String> getSpecialtyIds() { return specialtyIds; }
+      public List<Specialty> getSpecialties() { return specialties; }
+      ```
+    - **Update count methods**: `getNrOfSpecialties()` should use transient list, not ID list
 - **CRITICAL - Method Signature Conflicts**:
   - **When converting ID types from Integer to String, check for method signature conflicts**
   - **Common conflict**: `getPet(String name)` vs `getPet(String id)` - both have same signature
@@ -161,6 +180,28 @@
       }
   }
   ```
+
+#### **Template Relationship Population Pattern**
+Each service method that returns entities for template rendering MUST populate transient properties:
+
+```java
+private void populateRelationships(Entity entity) {
+    // For each relationship used in templates
+    if (entity.getRelatedIds() != null && !entity.getRelatedIds().isEmpty()) {
+        List<Related> relatedObjects = entity.getRelatedIds()
+            .stream()
+            .map(relatedRepository::findById)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .collect(Collectors.toList());
+        entity.setRelated(relatedObjects); // Set transient property
+    }
+}
+```
+
+#### **Critical Service Usage in Controllers**
+- **Replace ALL direct repository calls** with service calls in controllers
+- **Never return entities from repositories directly** to templates without relationship population
 - **Update controllers** to use service layer instead of repositories directly
 - **Controller pattern change**:
   ```java
@@ -337,6 +378,34 @@
 - **Verify service methods populate relationships** before returning entities
 - **Test all CRUD operations** through the web interface
 
+### Step 9.5 — **Template Runtime Validation** (CRITICAL)
+
+#### **Systematic Template Testing Process**
+After successful compilation and application startup:
+
+1. **Navigate to EVERY page** in the application systematically
+2. **Test each template that displays entity data**:
+   - List pages (e.g., `/vets`, `/owners`)
+   - Detail pages (e.g., `/owners/{id}`, `/vets/{id}`)
+   - Forms and edit pages
+3. **Look for specific template errors**:
+   - `Property or field 'relationshipName' cannot be found on object of type 'EntityName'`
+   - `EL1008E` Spring Expression Language errors
+   - Empty or missing data where relationships should appear
+
+#### **Template Error Resolution Checklist**
+When encountering template errors:
+- [ ] **Identify the missing property** from error message
+- [ ] **Check if property exists as transient field** in entity
+- [ ] **Verify service layer populates the property** before returning entity
+- [ ] **Ensure controller uses service layer**, not direct repository access
+- [ ] **Test the specific page again** after fixes
+
+#### **Common Template Error Patterns**
+- `Property or field 'specialties' cannot be found` → Add `@JsonIgnore private List<Specialty> specialties` to Vet entity
+- `Property or field 'pets' cannot be found` → Add `@JsonIgnore private List<Pet> pets` to Owner entity
+- Empty relationship data displayed → Service not populating transient properties
+
 ### Step 10 — **Systematic Error Resolution Process**
 
 #### When compilation fails:
@@ -375,6 +444,22 @@
 - **`cannot find symbol: method isNotZero()`** → Change to `isNotEmpty()` for String IDs
 - **`Property or field 'specialties' cannot be found`** → Add transient property and populate in service
 
+#### **Template-Specific Runtime Errors**
+- **`Property or field 'XXX' cannot be found on object of type 'YYY'`**:
+  - Root cause: Template accessing relationship property that was converted to ID storage
+  - Solution: Add transient property to entity + populate in service layer
+  - Prevention: Always check template usage before converting relationships
+
+- **`EL1008E` Spring Expression Language errors**:
+  - Root cause: Service layer not populating transient properties
+  - Solution: Verify `populateRelationships()` methods are called and working
+  - Prevention: Test all template navigation after service layer implementation
+
+- **Empty/null relationship data in templates**:
+  - Root cause: Controller bypassing service layer or service not populating relationships
+  - Solution: Ensure all controller methods use service layer for entity retrieval
+  - Prevention: Never return repository results directly to templates
+
 ### Step 11 — Validation checklist
 After conversion, verify:
 - [ ] **Main application compiles**: `mvn compile` succeeds
@@ -383,6 +468,11 @@ After conversion, verify:
 - [ ] **Application starts successfully**: `mvn spring-boot:run` without errors
 - [ ] **All web pages load**: Navigate through all application pages without runtime errors
 - [ ] **Service layer populates relationships**: Transient properties are correctly set
+- [ ] **All template pages render without errors**: Navigate through entire application
+- [ ] **Relationship data displays correctly**: Lists, counts, and related objects show properly
+- [ ] **No SpEL template errors in logs**: Check application logs during navigation
+- [ ] **Transient properties are @JsonIgnore annotated**: Prevents JSON serialization issues
+- [ ] **Service layer used consistently**: No direct repository access in controllers for template rendering
 - [ ] No remaining `jakarta.persistence` imports
 - [ ] All entity IDs are `String` type consistently
 - [ ] All repository interfaces extend `CosmosRepository<Entity, String>`
@@ -406,6 +496,11 @@ After conversion, verify:
 10. **Skipping runtime testing** - Always test the running application, not just compilation
 11. **Missing service layer** - Don't access repositories directly from controllers
 12. **Forgetting transient properties** - Templates may need access to relationship data
+13. **Not testing template navigation** - Compilation success doesn't mean templates work
+14. **Missing transient properties for templates** - Templates need object access, not just IDs
+15. **Service layer bypassing** - Controllers must use services, never direct repository access
+16. **Incomplete relationship population** - Service methods must populate ALL transient properties used by templates
+17. **Forgetting @JsonIgnore on transient properties** - Prevents serialization issues
 
 ### Debugging compilation issues systematically
 If compilation fails after conversion:
