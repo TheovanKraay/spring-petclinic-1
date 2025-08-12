@@ -77,6 +77,11 @@
   - Add `@Id` and `@GeneratedValue` annotations
   - Add `@PartitionKey` field (typically `String partitionKey`)
   - Remove all `jakarta.persistence` imports
+- **CRITICAL - Cosmos DB Serialization Requirements**:
+  - **Remove ALL `@JsonIgnore` annotations** from fields that need to be persisted to Cosmos DB
+  - **Authentication entities (User, Authority) MUST be fully serializable** - no `@JsonIgnore` on password, authorities, or other persisted fields
+  - **Use `@JsonProperty` instead of `@JsonIgnore`** when you need to control JSON field names but still persist the data
+  - **Common authentication serialization errors**: `Cannot pass null or empty values to constructor` usually means `@JsonIgnore` is blocking required field serialization
 - **Entity-specific changes**:
   - Replace `@Entity` with `@Container(containerName = "<plural-entity-name>")`
   - Remove `@Table`, `@Column`, `@JoinColumn`, etc.
@@ -86,6 +91,37 @@
     - Use reference IDs for many-to-one (e.g., `String ownerId` in Pet)
     - **For complex relationships**: Store IDs but add transient properties for templates
   - Add constructor to set partition key: `setPartitionKey("entityType")`
+- **CRITICAL - Authentication Entity Pattern**:
+  - **For User entities with Spring Security**: Store authorities as `Set<String>` instead of `Set<Authority>` objects
+  - **Example User entity transformation**:
+    ```java
+    @Container(containerName = "users")
+    public class User {
+        @Id
+        private String id;
+        
+        @PartitionKey
+        private String partitionKey = "user";
+        
+        private String login;
+        private String password; // NO @JsonIgnore - must be serializable
+        
+        @JsonProperty("authorities") // Use @JsonProperty, not @JsonIgnore
+        private Set<String> authorities = new HashSet<>(); // Store as strings
+        
+        // Add transient property for Spring Security compatibility if needed
+        // @JsonIgnore - ONLY for transient properties not persisted to Cosmos
+        private Set<Authority> authorityObjects = new HashSet<>();
+        
+        // Conversion methods between string authorities and Authority objects
+        public void setAuthorityObjects(Set<Authority> authorities) {
+            this.authorityObjects = authorities;
+            this.authorities = authorities.stream()
+                .map(Authority::getName)
+                .collect(Collectors.toSet());
+        }
+    }
+    ```
 - **CRITICAL - Template Compatibility for Relationship Changes**:
   - **When converting relationships to ID references, preserve template access**
   - **Example**: If entity had `List<Specialty> specialties` → convert to:
@@ -181,6 +217,49 @@
   }
   ```
 
+### Step 6.5 — **Spring Security Integration** (CRITICAL for Authentication)
+- **UserDetailsService Integration Pattern**:
+  ```java
+  @Service
+  @Transactional
+  public class DomainUserDetailsService implements UserDetailsService {
+      
+      private final UserRepository userRepository;
+      private final AuthorityRepository authorityRepository;
+      
+      @Override
+      public UserDetails loadUserByUsername(String login) {
+          log.debug("Authenticating user: {}", login);
+          
+          return userRepository.findOneByLogin(login)
+              .map(user -> createSpringSecurityUser(login, user))
+              .orElseThrow(() -> new UsernameNotFoundException("User " + login + " was not found"));
+      }
+      
+      private org.springframework.security.core.userdetails.User createSpringSecurityUser(String lowercaseLogin, User user) {
+          if (!user.isActivated()) {
+              throw new UserNotActivatedException("User " + lowercaseLogin + " was not activated");
+          }
+          
+          // Convert string authorities back to GrantedAuthority objects
+          List<GrantedAuthority> grantedAuthorities = user.getAuthorities()
+              .stream()
+              .map(SimpleGrantedAuthority::new)
+              .collect(Collectors.toList());
+          
+          return new org.springframework.security.core.userdetails.User(user.getLogin(),
+              user.getPassword(),
+              grantedAuthorities);
+      }
+  }
+  ```
+- **Key Authentication Requirements**:
+  - User entity must be fully serializable (no `@JsonIgnore` on password/authorities)
+  - Store authorities as `Set<String>` for Cosmos DB compatibility
+  - Convert between string authorities and `GrantedAuthority` objects in UserDetailsService
+  - Add comprehensive debugging logs to trace authentication flow
+  - Handle activated/deactivated user states appropriately
+
 #### **Template Relationship Population Pattern**
 Each service method that returns entities for template rendering MUST populate transient properties:
 
@@ -233,6 +312,14 @@ private void populateRelationships(Entity entity) {
       }
   }
   ```
+- **CRITICAL - BigDecimal Reflection Issues with JDK 17+**:
+  - **If using BigDecimal fields**, you may encounter reflection errors during seeding
+  - **Error pattern**: `Unable to make field private final java.math.BigInteger java.math.BigDecimal.intVal accessible`
+  - **Solutions**:
+    1. Use `Double` or `String` instead of `BigDecimal` for monetary values
+    2. Add JVM argument: `--add-opens java.base/java.math=ALL-UNNAMED`
+    3. Wrap BigDecimal operations in try-catch and handle gracefully
+  - **The application will start successfully even if seeding fails** - check logs for seeding errors
 
 ### Step 8 — Test file conversion (CRITICAL SECTION)
 **This step is often overlooked but essential for successful conversion**
@@ -501,6 +588,9 @@ After conversion, verify:
 15. **Service layer bypassing** - Controllers must use services, never direct repository access
 16. **Incomplete relationship population** - Service methods must populate ALL transient properties used by templates
 17. **Forgetting @JsonIgnore on transient properties** - Prevents serialization issues
+18. **@JsonIgnore on persisted fields** - **CRITICAL**: Never use `@JsonIgnore` on fields that need to be stored in Cosmos DB
+19. **Authentication serialization errors** - User/Authority entities must be fully serializable without `@JsonIgnore` blocking required fields
+20. **BigDecimal reflection issues** - Use alternative data types or JVM arguments for JDK 17+ compatibility
 
 ### Debugging compilation issues systematically
 If compilation fails after conversion:
@@ -525,6 +615,10 @@ If runtime fails after successful compilation:
 5. **Check that transient properties are populated** in service methods
 6. **Test all CRUD operations** through the web interface
 7. **Verify data seeding worked correctly** and relationships are maintained
+8. **Authentication-specific debugging**:
+   - `Cannot pass null or empty values to constructor` → Check for `@JsonIgnore` on required fields
+   - `BadCredentialsException` → Verify User entity serialization and password field accessibility
+   - Check logs for "DomainUserDetailsService" debugging output to trace authentication flow
 
 ### **Pro Tips for Success**
 - **Compile early and often** - Don't let errors accumulate
@@ -535,5 +629,50 @@ If runtime fails after successful compilation:
 - **Check controller classes** - They often call repository methods that change signatures
 - **Always test runtime** - Compilation success doesn't guarantee functional templates
 - **Service layer is critical** - Bridge between document storage and template expectations
+
+### **Authentication Troubleshooting Guide** (CRITICAL)
+
+#### **Common Authentication Serialization Errors**:
+
+1. **`Cannot pass null or empty values to constructor`**:
+   - **Root Cause**: `@JsonIgnore` preventing required field serialization to Cosmos DB
+   - **Solution**: Remove `@JsonIgnore` from all persisted fields (password, authorities, etc.)
+   - **Verification**: Check User entity has no `@JsonIgnore` on stored fields
+
+2. **`BadCredentialsException` during login**:
+   - **Root Cause**: Password field not accessible during authentication
+   - **Solution**: Ensure password field is serializable and accessible in UserDetailsService
+   - **Verification**: Add debug logs in `loadUserByUsername` method
+
+3. **Authorities not loading correctly**:
+   - **Root Cause**: Authority objects stored as complex entities instead of strings
+   - **Solution**: Store authorities as `Set<String>` and convert to `GrantedAuthority` in UserDetailsService
+   - **Pattern**:
+     ```java
+     // In User entity - stored in Cosmos
+     @JsonProperty("authorities")
+     private Set<String> authorities = new HashSet<>();
+     
+     // In UserDetailsService - convert for Spring Security
+     List<GrantedAuthority> grantedAuthorities = user.getAuthorities()
+         .stream()
+         .map(SimpleGrantedAuthority::new)
+         .collect(Collectors.toList());
+     ```
+
+4. **User entity not found during authentication**:
+   - **Root Cause**: Repository query methods not working with String IDs
+   - **Solution**: Update repository `findOneByLogin` method to work with Cosmos DB
+   - **Verification**: Test repository methods independently
+
+#### **Authentication Debugging Checklist**:
+- [ ] User entity fully serializable (no `@JsonIgnore` on persisted fields)
+- [ ] Password field accessible and not null
+- [ ] Authorities stored as `Set<String>` 
+- [ ] UserDetailsService converts string authorities to `GrantedAuthority`
+- [ ] Repository methods work with String IDs
+- [ ] Debug logging enabled in authentication service
+- [ ] User activation status checked appropriately
+- [ ] Test login with known credentials (admin/admin)
 
 This comprehensive guide ensures successful JPA to Cosmos DB conversion with properly functioning tests and no compilation errors.
