@@ -1,5 +1,7 @@
 # Convert Spring JPA project to Spring Data Cosmos
 
+This generalized guide applies to any JPA to Spring Data Cosmos DB conversion project.
+
 ## High-level plan
 
 1. Swap build dependencies (remove JPA, add Cosmos + Identity).
@@ -991,5 +993,3 @@ public Set<RelatedEntity> getRelatedEntities() {
 - **Add transient properties** with `@JsonIgnore` for UI access to related data
 - **Use service layer** to populate transient relationships before rendering
 - **Never return repository results directly** to templates without relationship population
-
-This generalized guide applies to any JPA to Spring Data Cosmos DB conversion project.
