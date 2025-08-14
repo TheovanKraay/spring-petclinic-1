@@ -17,16 +17,14 @@ package org.springframework.samples.petclinic.vet;
 
 import org.springframework.samples.petclinic.model.NamedEntity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import com.azure.spring.data.cosmos.core.mapping.Container;
 
 /**
  * Models a {@link Vet Vet's} specialty (for example, dentistry).
  *
  * @author Juergen Hoeller
  */
-@Entity
-@Table(name = "specialties")
+@Container(containerName = "specialties")
 public class Specialty extends NamedEntity {
 
 }

@@ -21,8 +21,11 @@ import java.util.Optional;
 import jakarta.annotation.Nonnull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.azure.spring.data.cosmos.repository.CosmosRepository;
+import com.azure.spring.data.cosmos.repository.Query;
+import com.azure.spring.data.cosmos.core.query.CosmosQuery;
 
 /**
  * Repository class for <code>Owner</code> domain objects. All method names are compliant
@@ -36,7 +39,7 @@ import org.springframework.data.jpa.repository.Query;
  * @author Michael Isvy
  * @author Wick Dynex
  */
-public interface OwnerRepository extends JpaRepository<Owner, Integer> {
+public interface OwnerRepository extends CosmosRepository<Owner, String> {
 
 	/**
 	 * Retrieve {@link Owner}s from the data store by last name, returning all owners
@@ -45,21 +48,17 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
 	 * @return a Collection of matching {@link Owner}s (or an empty Collection if none
 	 * found)
 	 */
-	Page<Owner> findByLastNameStartingWith(String lastName, Pageable pageable);
+	@Query("SELECT * FROM c WHERE (@lastName = '' OR STARTSWITH(c.lastName, @lastName))")
+	List<Owner> findByLastNameStartingWith(@Param("lastName") String lastName);
 
 	/**
-	 * Retrieve an {@link Owner} from the data store by id.
-	 * <p>
-	 * This method returns an {@link Optional} containing the {@link Owner} if found. If
-	 * no {@link Owner} is found with the provided id, it will return an empty
-	 * {@link Optional}.
-	 * </p>
-	 * @param id the id to search for
-	 * @return an {@link Optional} containing the {@link Owner} if found, or an empty
-	 * {@link Optional} if not found.
-	 * @throws IllegalArgumentException if the id is null (assuming null is not a valid
-	 * input for id)
+	 * Retrieve {@link Owner}s from the data store by last name with pagination, returning
+	 * all owners whose last name <i>starts</i> with the given name.
+	 * @param lastName Value to search for
+	 * @param pageable Pagination information
+	 * @return a Page of matching {@link Owner}s (or an empty Page if none found)
 	 */
-	Optional<Owner> findById(@Nonnull Integer id);
+	@Query("SELECT * FROM c WHERE (@lastName = '' OR STARTSWITH(c.lastName, @lastName))")
+	Page<Owner> findByLastNameStartingWith(@Param("lastName") String lastName, Pageable pageable);
 
 }

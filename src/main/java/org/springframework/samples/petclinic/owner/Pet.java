@@ -16,22 +16,15 @@
 package org.springframework.samples.petclinic.owner;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.samples.petclinic.model.NamedEntity;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
-import jakarta.persistence.Table;
+import com.azure.spring.data.cosmos.core.mapping.Container;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Simple business object representing a pet.
@@ -41,22 +34,27 @@ import jakarta.persistence.Table;
  * @author Sam Brannen
  * @author Wick Dynex
  */
-@Entity
-@Table(name = "pets")
+@Container(containerName = "pets")
 public class Pet extends NamedEntity {
 
-	@Column(name = "birth_date")
 	@DateTimeFormat(pattern = "yyyy-MM-dd")
 	private LocalDate birthDate;
 
-	@ManyToOne
-	@JoinColumn(name = "type_id")
+	private String typeId;
+
+	private String typeName;
+
+	private String ownerId;
+
+	private List<String> visitIds = new ArrayList<>();
+
+	// Transient property for template compatibility
+	@JsonIgnore
 	private PetType type;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-	@JoinColumn(name = "pet_id")
-	@OrderBy("date ASC")
-	private final Set<Visit> visits = new LinkedHashSet<>();
+	// Transient property for template compatibility
+	@JsonIgnore
+	private List<Visit> visits = new ArrayList<>();
 
 	public void setBirthDate(LocalDate birthDate) {
 		this.birthDate = birthDate;
@@ -66,6 +64,43 @@ public class Pet extends NamedEntity {
 		return this.birthDate;
 	}
 
+	public String getTypeId() {
+		return this.typeId;
+	}
+
+	public void setTypeId(String typeId) {
+		this.typeId = typeId;
+	}
+
+	public String getTypeName() {
+		return this.typeName;
+	}
+
+	public void setTypeName(String typeName) {
+		this.typeName = typeName;
+	}
+
+	public String getOwnerId() {
+		return this.ownerId;
+	}
+
+	public void setOwnerId(String ownerId) {
+		this.ownerId = ownerId;
+	}
+
+	public List<String> getVisitIds() {
+		return this.visitIds;
+	}
+
+	public void setVisitIds(List<String> visitIds) {
+		this.visitIds = visitIds;
+	}
+
+	public void addVisitId(String visitId) {
+		this.visitIds.add(visitId);
+	}
+
+	// Transient property getters and setters for template compatibility
 	public PetType getType() {
 		return this.type;
 	}
@@ -74,12 +109,12 @@ public class Pet extends NamedEntity {
 		this.type = type;
 	}
 
-	public Collection<Visit> getVisits() {
+	public List<Visit> getVisits() {
 		return this.visits;
 	}
 
-	public void addVisit(Visit visit) {
-		getVisits().add(visit);
+	public void setVisits(List<Visit> visits) {
+		this.visits = visits;
 	}
 
 }

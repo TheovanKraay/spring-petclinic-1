@@ -13,34 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.samples.petclinic.model;
+package org.springframework.samples.petclinic.config;
 
-import jakarta.validation.constraints.NotBlank;
+import org.springframework.context.annotation.Configuration;
+
+import com.azure.spring.data.cosmos.repository.config.EnableCosmosRepositories;
 
 /**
- * Simple JavaBean domain object adds a name property to <code>BaseEntity</code>. Used as
- * a base class for objects needing these properties.
- *
- * @author Ken Krebs
- * @author Juergen Hoeller
- * @author Wick Dynex
+ * Configuration class for Azure Cosmos DB integration.
  */
-public class NamedEntity extends BaseEntity {
-
-	@NotBlank
-	private String name;
-
-	public String getName() {
-		return this.name;
-	}
-
-	public void setName(String name) {
-		this.name = name;
-	}
-
-	@Override
-	public String toString() {
-		return this.getName();
-	}
+@Configuration
+@EnableCosmosRepositories(basePackages = "org.springframework.samples.petclinic")
+public class CosmosConfiguration {
 
 }

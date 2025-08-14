@@ -20,9 +20,7 @@ import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.samples.petclinic.model.BaseEntity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import com.azure.spring.data.cosmos.core.mapping.Container;
 import jakarta.validation.constraints.NotBlank;
 
 /**
@@ -31,16 +29,16 @@ import jakarta.validation.constraints.NotBlank;
  * @author Ken Krebs
  * @author Dave Syer
  */
-@Entity
-@Table(name = "visits")
+@Container(containerName = "visits")
 public class Visit extends BaseEntity {
 
-	@Column(name = "visit_date")
 	@DateTimeFormat(pattern = "yyyy-MM-dd")
 	private LocalDate date;
 
 	@NotBlank
 	private String description;
+
+	private String petId;
 
 	/**
 	 * Creates a new instance of Visit for the current date
@@ -63,6 +61,14 @@ public class Visit extends BaseEntity {
 
 	public void setDescription(String description) {
 		this.description = description;
+	}
+
+	public String getPetId() {
+		return this.petId;
+	}
+
+	public void setPetId(String petId) {
+		this.petId = petId;
 	}
 
 }

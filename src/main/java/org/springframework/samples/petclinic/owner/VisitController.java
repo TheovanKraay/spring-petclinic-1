@@ -43,8 +43,14 @@ class VisitController {
 
 	private final OwnerRepository owners;
 
-	public VisitController(OwnerRepository owners) {
+	private final PetRepository pets;
+
+	private final VisitRepository visits;
+
+	public VisitController(OwnerRepository owners, PetRepository pets, VisitRepository visits) {
 		this.owners = owners;
+		this.pets = pets;
+		this.visits = visits;
 	}
 
 	@InitBinder
@@ -57,21 +63,28 @@ class VisitController {
 	 * we always have fresh data - Since we do not use the session scope, make sure that
 	 * Pet object always has an id (Even though id is not part of the form fields)
 	 * @param petId
-	 * @return Pet
+	 * @return Visit
 	 */
 	@ModelAttribute("visit")
-	public Visit loadPetWithVisit(@PathVariable("ownerId") int ownerId, @PathVariable("petId") int petId,
+	public Visit loadPetWithVisit(@PathVariable("ownerId") String ownerId, @PathVariable("petId") String petId,
 			Map<String, Object> model) {
 		Optional<Owner> optionalOwner = owners.findById(ownerId);
 		Owner owner = optionalOwner.orElseThrow(() -> new IllegalArgumentException(
 				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
 
-		Pet pet = owner.getPet(petId);
+		Optional<Pet> optionalPet = pets.findById(petId);
+		Pet pet = optionalPet.orElseThrow(() -> new IllegalArgumentException(
+				"Pet not found with id: " + petId + ". Please ensure the ID is correct "));
+
+		// Verify pet belongs to owner
+		if (!pet.getOwnerId().equals(ownerId)) {
+			throw new IllegalArgumentException("Pet does not belong to the specified owner");
+		}
+
 		model.put("pet", pet);
 		model.put("owner", owner);
 
 		Visit visit = new Visit();
-		pet.addVisit(visit);
 		return visit;
 	}
 
@@ -85,14 +98,24 @@ class VisitController {
 	// Spring MVC calls method loadPetWithVisit(...) before processNewVisitForm is
 	// called
 	@PostMapping("/owners/{ownerId}/pets/{petId}/visits/new")
-	public String processNewVisitForm(@ModelAttribute Owner owner, @PathVariable int petId, @Valid Visit visit,
+	public String processNewVisitForm(@ModelAttribute Owner owner, @PathVariable String petId, @Valid Visit visit,
 			BindingResult result, RedirectAttributes redirectAttributes) {
 		if (result.hasErrors()) {
 			return "pets/createOrUpdateVisitForm";
 		}
 
-		owner.addVisit(petId, visit);
-		this.owners.save(owner);
+		// Set the pet ID for the visit
+		visit.setPetId(petId);
+		Visit savedVisit = visits.save(visit);
+
+		// Update pet's visit list
+		Optional<Pet> petOpt = pets.findById(petId);
+		if (petOpt.isPresent()) {
+			Pet pet = petOpt.get();
+			pet.addVisitId(savedVisit.getId());
+			pets.save(pet);
+		}
+
 		redirectAttributes.addFlashAttribute("message", "Your visit has been booked");
 		return "redirect:/owners/{ownerId}";
 	}

@@ -13,25 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.samples.petclinic.vet;
 
-import org.springframework.cache.annotation.Cacheable;
-
-import com.azure.spring.data.cosmos.repository.CosmosRepository;
+package org.springframework.samples.petclinic.owner;
 
 import java.util.List;
 
+import com.azure.spring.data.cosmos.repository.CosmosRepository;
+import com.azure.spring.data.cosmos.core.query.CosmosQuery;
+
 /**
- * Repository class for <code>Vet</code> domain objects All method names are compliant
- * with Spring Data naming conventions so this interface can easily be extended for Spring
- * Data. See:
- * https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-creation
- *
- * @author Ken Krebs
- * @author Juergen Hoeller
- * @author Sam Brannen
- * @author Michael Isvy
+ * Repository class for <code>Visit</code> domain objects.
  */
-public interface VetRepository extends CosmosRepository<Vet, String> {
+public interface VisitRepository extends CosmosRepository<Visit, String> {
+
+	/**
+	 * Retrieve visits by pet ID.
+	 * @param petId Value to search for
+	 * @return a Collection of matching {@link Visit}s
+	 */
+	List<Visit> findByPetId(String petId);
 
 }

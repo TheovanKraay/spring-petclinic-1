@@ -16,11 +16,12 @@
 package org.springframework.samples.petclinic.model;
 
 import java.io.Serializable;
+import java.util.UUID;
 
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.MappedSuperclass;
+import com.azure.spring.data.cosmos.core.mapping.PartitionKey;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.CreatedDate;
+import jakarta.annotation.PostConstruct;
 
 /**
  * Simple JavaBean domain object with an id property. Used as a base class for objects
@@ -29,19 +30,53 @@ import jakarta.persistence.MappedSuperclass;
  * @author Ken Krebs
  * @author Juergen Hoeller
  */
-@MappedSuperclass
 public class BaseEntity implements Serializable {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Integer id;
+	private String id;
 
-	public Integer getId() {
+	@PartitionKey
+	private String partitionKey;
+
+	public BaseEntity() {
+		this.partitionKey = getClass().getSimpleName().toLowerCase();
+		// Generate ID if not already set
+		if (this.id == null) {
+			this.id = generateId();
+		}
+	}
+
+	/**
+	 * Generate a unique ID for new entities
+	 */
+	private String generateId() {
+		String entityType = getClass().getSimpleName().toLowerCase();
+		return entityType + "-" + UUID.randomUUID().toString().substring(0, 8);
+	}
+
+	public String getId() {
 		return id;
 	}
 
-	public void setId(Integer id) {
+	public void setId(String id) {
 		this.id = id;
+	}
+
+	/**
+	 * Ensure this entity has an ID before saving
+	 */
+	public void ensureId() {
+		if (this.id == null || this.id.trim().isEmpty()) {
+			this.id = generateId();
+		}
+	}
+
+	public String getPartitionKey() {
+		return partitionKey;
+	}
+
+	public void setPartitionKey(String partitionKey) {
+		this.partitionKey = partitionKey;
 	}
 
 	public boolean isNew() {
