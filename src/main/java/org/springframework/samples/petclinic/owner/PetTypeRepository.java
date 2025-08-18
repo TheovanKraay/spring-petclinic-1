@@ -17,13 +17,9 @@
 package org.springframework.samples.petclinic.owner;
 
 import java.util.List;
-import java.util.Optional;
 
-import jakarta.annotation.Nonnull;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import com.azure.spring.data.cosmos.repository.CosmosRepository;
+import com.azure.spring.data.cosmos.repository.Query;
 
 /**
  * Repository class for <code>PetType</code> domain objects.
@@ -31,13 +27,13 @@ import org.springframework.data.jpa.repository.Query;
  * @author Patrick Baumgartner
  */
 
-public interface PetTypeRepository extends JpaRepository<PetType, Integer> {
+public interface PetTypeRepository extends CosmosRepository<PetType, String> {
 
 	/**
 	 * Retrieve all {@link PetType}s from the data store.
 	 * @return a Collection of {@link PetType}s.
 	 */
-	@Query("SELECT ptype FROM PetType ptype ORDER BY ptype.name")
+	@Query("SELECT * FROM petTypes p ORDER BY p.name")
 	List<PetType> findPetTypes();
 
 }

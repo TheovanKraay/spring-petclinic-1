@@ -46,12 +46,12 @@ class PetController {
 
 	private static final String VIEWS_PETS_CREATE_OR_UPDATE_FORM = "pets/createOrUpdatePetForm";
 
-	private final OwnerRepository owners;
+	private final OwnerService ownerService;
 
 	private final PetTypeRepository types;
 
-	public PetController(OwnerRepository owners, PetTypeRepository types) {
-		this.owners = owners;
+	public PetController(OwnerService ownerService, PetTypeRepository types) {
+		this.ownerService = ownerService;
 		this.types = types;
 	}
 
@@ -61,25 +61,25 @@ class PetController {
 	}
 
 	@ModelAttribute("owner")
-	public Owner findOwner(@PathVariable("ownerId") int ownerId) {
-		Optional<Owner> optionalOwner = this.owners.findById(ownerId);
+	public Owner findOwner(@PathVariable("ownerId") String ownerId) {
+		Optional<Owner> optionalOwner = this.ownerService.findById(ownerId);
 		Owner owner = optionalOwner.orElseThrow(() -> new IllegalArgumentException(
 				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
 		return owner;
 	}
 
 	@ModelAttribute("pet")
-	public Pet findPet(@PathVariable("ownerId") int ownerId,
-			@PathVariable(name = "petId", required = false) Integer petId) {
+	public Pet findPet(@PathVariable("ownerId") String ownerId,
+			@PathVariable(name = "petId", required = false) String petId) {
 
 		if (petId == null) {
 			return new Pet();
 		}
 
-		Optional<Owner> optionalOwner = this.owners.findById(ownerId);
+		Optional<Owner> optionalOwner = this.ownerService.findById(ownerId);
 		Owner owner = optionalOwner.orElseThrow(() -> new IllegalArgumentException(
 				"Owner not found with id: " + ownerId + ". Please ensure the ID is correct "));
-		return owner.getPet(petId);
+		return owner.getPetById(petId);
 	}
 
 	@InitBinder("owner")
@@ -116,7 +116,7 @@ class PetController {
 		}
 
 		owner.addPet(pet);
-		this.owners.save(owner);
+		this.ownerService.save(owner);
 		redirectAttributes.addFlashAttribute("message", "New Pet has been Added");
 		return "redirect:/owners/{ownerId}";
 	}
@@ -170,7 +170,7 @@ class PetController {
 		else {
 			owner.addPet(pet);
 		}
-		this.owners.save(owner);
+		this.ownerService.save(owner);
 	}
 
 }

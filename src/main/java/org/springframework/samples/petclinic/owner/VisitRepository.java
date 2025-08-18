@@ -13,34 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.samples.petclinic.model;
+package org.springframework.samples.petclinic.owner;
 
-import jakarta.validation.constraints.NotBlank;
+import java.util.List;
+
+import com.azure.spring.data.cosmos.repository.CosmosRepository;
+import com.azure.spring.data.cosmos.repository.Query;
 
 /**
- * Simple JavaBean domain object adds a name property to <code>BaseEntity</code>. Used as
- * a base class for objects needing these properties.
+ * Repository class for <code>Visit</code> domain objects.
  *
  * @author Ken Krebs
  * @author Juergen Hoeller
- * @author Wick Dynex
+ * @author Sam Brannen
+ * @author Michael Isvy
  */
-public class NamedEntity extends BaseEntity {
+public interface VisitRepository extends CosmosRepository<Visit, String> {
 
-	@NotBlank
-	private String name;
-
-	public String getName() {
-		return this.name;
-	}
-
-	public void setName(String name) {
-		this.name = name;
-	}
-
-	@Override
-	public String toString() {
-		return this.getName();
-	}
+	/**
+	 * Retrieve all {@link Visit}s by pet ID.
+	 * @param petId the pet ID
+	 * @return a Collection of {@link Visit}s.
+	 */
+	@Query("SELECT * FROM visits v WHERE v.petId = @petId ORDER BY v.date DESC")
+	List<Visit> findByPetId(String petId);
 
 }

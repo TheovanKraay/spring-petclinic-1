@@ -22,14 +22,8 @@ import org.springframework.core.style.ToStringCreator;
 import org.springframework.samples.petclinic.model.Person;
 import org.springframework.util.Assert;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
-import jakarta.persistence.Table;
+import com.azure.spring.data.cosmos.core.mapping.Container;
+import com.azure.spring.data.cosmos.core.mapping.PartitionKey;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.NotBlank;
 
@@ -43,26 +37,20 @@ import jakarta.validation.constraints.NotBlank;
  * @author Oliver Drotbohm
  * @author Wick Dynex
  */
-@Entity
-@Table(name = "owners")
+@Container(containerName = "owners")
 public class Owner extends Person {
 
-	@Column(name = "address")
 	@NotBlank
 	private String address;
 
-	@Column(name = "city")
 	@NotBlank
 	private String city;
 
-	@Column(name = "telephone")
 	@NotBlank
 	@Pattern(regexp = "\\d{10}", message = "{telephone.invalid}")
+	@PartitionKey
 	private String telephone;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-	@JoinColumn(name = "owner_id")
-	@OrderBy("name")
 	private final List<Pet> pets = new ArrayList<>();
 
 	public String getAddress() {
@@ -113,11 +101,11 @@ public class Owner extends Person {
 	 * @param id to test
 	 * @return the Pet with the given id, or null if no such Pet exists for this Owner
 	 */
-	public Pet getPet(Integer id) {
+	public Pet getPetById(String id) {
 		for (Pet pet : getPets()) {
 			if (!pet.isNew()) {
-				Integer compId = pet.getId();
-				if (compId.equals(id)) {
+				String compId = pet.getId();
+				if (compId != null && compId.equals(id)) {
 					return pet;
 				}
 			}
@@ -160,12 +148,12 @@ public class Owner extends Person {
 	 * @param petId the identifier of the {@link Pet}, must not be {@literal null}.
 	 * @param visit the visit to add, must not be {@literal null}.
 	 */
-	public void addVisit(Integer petId, Visit visit) {
+	public void addVisit(String petId, Visit visit) {
 
 		Assert.notNull(petId, "Pet identifier must not be null!");
 		Assert.notNull(visit, "Visit must not be null!");
 
-		Pet pet = getPet(petId);
+		Pet pet = getPetById(petId);
 
 		Assert.notNull(pet, "Invalid Pet identifier!");
 
