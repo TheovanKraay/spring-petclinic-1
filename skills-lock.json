@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "cosmosdb-best-practices": {
+      "source": "AzureCosmosDB/cosmosdb-agent-kit",
+      "sourceType": "github",
+      "computedHash": "2819c2e198fe3e2e52f19568746483e86058983e297267baa7bcdadc2c0342df"
+    }
+  }
+}
